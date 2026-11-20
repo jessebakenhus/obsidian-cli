@@ -1,12 +1,12 @@
-# obsidian-engine
+# obsidian-cli
 
 `obs` is a single zsh script for working with your [Obsidian](https://obsidian.md) vault from the terminal. It reads, edits, creates and moves notes and folders, including nested subfolders. It needs no dependencies and no Obsidian plugin.
 
 ## Install
 
 ```zsh
-git clone https://github.com/jessebakenhus/obsidian-engine.git ~/obsidian-engine
-mkdir -p ~/.local/bin && ln -s ~/obsidian-engine/obs ~/.local/bin/obs
+git clone https://github.com/jessebakenhus/obsidian-cli.git ~/obsidian-cli
+mkdir -p ~/.local/bin && ln -s ~/obsidian-cli/obs ~/.local/bin/obs
 ```
 
 `~/.local/bin` must be on your `PATH`.
