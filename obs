@@ -1,0 +1,57 @@
+#!/bin/zsh
+# obs – Obsidian Vault per zsh lesen, bearbeiten, Dateien/Ordner anlegen.
+# Alle Pfade sind relativ zum Vault, Unterordner gehen einfach mit "/": obs new Projekte/2026/Idee
+set -euo pipefail
+
+# shortcut: nimmt den ersten Vault aus Obsidians Konfig; bei mehreren Vaults OBS_VAULT setzen.
+VAULT="${OBS_VAULT:-$(grep -o '"path":"[^"]*"' "$HOME/Library/Application Support/obsidian/obsidian.json" 2>/dev/null | head -1 | cut -d'"' -f4)}"
+[[ -d "$VAULT" ]] || { echo "Vault nicht gefunden: $VAULT (OBS_VAULT setzen)" >&2; exit 1; }
+
+usage() {
+  cat <<'EOF'
+obs ls [ordner]            Inhalt eines Ordners anzeigen
+obs tree [ordner]          Alle Dateien rekursiv anzeigen
+obs read <notiz>           Notiz ausgeben
+obs edit <notiz>           Notiz in $EDITOR öffnen (legt sie an, falls neu)
+obs new <notiz> [text]     Neue Notiz anlegen (Text auch per stdin)
+obs append <notiz> <text>  Text ans Ende anhängen (Text auch per stdin)
+obs mkdir <ordner>         Ordner anlegen (inkl. Unterordner)
+obs mv <alt> <neu>         Notiz/Ordner verschieben oder umbenennen
+obs search <begriff>       Volltextsuche in allen Notizen
+Notizen ohne Endung bekommen automatisch .md.
+EOF
+}
+
+# Pfad im Vault auflösen; verhindert, dass man per ".." oder "/" aus dem Vault ausbricht.
+p() {
+  local rel="${1:-}"
+  [[ "$rel" == /* || "/$rel/" == */../* ]] && { echo "Ungültiger Pfad: $rel" >&2; exit 1; }
+  echo "$VAULT/$rel"
+}
+# Wie p, hängt aber .md an, wenn keine Endung da ist.
+note() { local f; f=$(p "$1"); [[ "${f:t}" == *.* ]] && echo "$f" || echo "$f.md"; }
+need() { [[ -n "${1:-}" ]] || { usage >&2; exit 1; }; }
+text() { (( $# )) && print -r -- "$*" || cat; }
+
+cmd="${1:-help}"; shift || true
+case "$cmd" in
+  ls)     d=$(p "${1:-}"); ls -1p "$d" ;;
+  tree)   d=$(p "${1:-}"); cd "$d" && find . -not -path '*/.*' -type f | sed 's|^\./||' | sort ;;
+  read)   need "${1:-}"; f=$(note "$1"); cat "$f" ;;
+  edit)   need "${1:-}"; f=$(note "$1"); mkdir -p "${f:h}"; ${EDITOR:-nano} "$f" ;;
+  new)    need "${1:-}"; f=$(note "$1"); shift
+          [[ -e "$f" ]] && { echo "Existiert schon: $f" >&2; exit 1; }
+          mkdir -p "${f:h}"
+          if (( $# )) || [[ ! -t 0 ]]; then text "$@" > "$f"; else : > "$f"; fi
+          echo "Angelegt: ${f#$VAULT/}" ;;
+  append) need "${1:-}"; f=$(note "$1"); shift
+          [[ -e "$f" ]] || { echo "Nicht gefunden: $f" >&2; exit 1; }
+          text "$@" >> "$f" ;;
+  mkdir)  need "${1:-}"; d=$(p "$1"); mkdir -p "$d" && echo "Ordner: $1" ;;
+  mv)     need "${2:-}"; src=$(p "$1"); [[ -e "$src" ]] || src=$(note "$1")
+          dst=$(p "$2"); [[ -f "$src" && "${dst:t}" != *.* && ! -d "$dst" ]] && dst="$dst.md"
+          mkdir -p "${dst:h}"; mv -n "$src" "$dst" && echo "Verschoben: ${src#$VAULT/} -> ${dst#$VAULT/}" ;;
+  search) need "${1:-}"; cd "$VAULT" && find . -not -path '*/.*' -type f -name '*.md' -print0 | xargs -0 grep -niIH -- "$1" | sed 's|^\./||' ;;
+  help|-h|--help) usage ;;
+  *) echo "Unbekannter Befehl: $cmd" >&2; usage >&2; exit 1 ;;
+esac
